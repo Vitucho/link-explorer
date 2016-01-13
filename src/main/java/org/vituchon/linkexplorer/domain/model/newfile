@@ -1,0 +1,33 @@
+    public static class URLFetcherStatus  {
+
+
+        @Override
+        public String toString() {
+            if (urlSpec == null) {
+                return "No request done";
+            } else {
+                String description;
+                if (this.read == 0) {
+                    description = "About to fecth ";
+                } else {
+                    if (this.read < this.total) {
+                        int percentaje = ((this.read * 100) / this.total);
+                        description = "Fetching " + this.read + " / " + this.total + " (" + percentaje + "%) at ";
+                    } else {
+                        description = "Fetched ";
+                    }
+                }
+                return description + urlSpec;
+            }
+        }
+    }
+
+        @Override
+        public String toString() {
+            return "[LinkResolverStatus] Resolving " + this.resolved + " from " + this.total + " (" + this.percentaje + ")"; 
+        }
+    
+        @Override
+        public String toString() {
+            return "[LinkScannerStatus] Scanning " + this.resolved + " from " + this.total + " (" + this.percentaje + ")"; 
+        }
