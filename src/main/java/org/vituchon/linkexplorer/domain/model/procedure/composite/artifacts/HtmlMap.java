@@ -37,7 +37,7 @@ public class HtmlMap {
         return root;
     }
 
-    synchronized void addLink(String from, String to) {
+    void addLink(String from, String to) {
         if (!this.map.getNodes().contains(to)) {
             map.addNode(to);
         }
@@ -49,7 +49,7 @@ public class HtmlMap {
         return pathFinder.getDist(url).intValue();
     }
 
-    public synchronized String toTabbedString() {
+    public String toTabbedString() {
         StringBuilder sb = new StringBuilder();
         Set<String> nodes = this.map.getNodes();
         PathFinder<String> pathFinder = this.map.pathFinder(root);
@@ -65,7 +65,7 @@ public class HtmlMap {
         return sb.toString();
     }
 
-    public synchronized Map<String, List<String>> toSiteMap() {
+    public  Map<String, List<String>> toSiteMap() {
         Map<String, List<String>> siteMap = new HashMap<>();
         Set<String> nodes = this.map.getNodes();
         for (String node : nodes) {

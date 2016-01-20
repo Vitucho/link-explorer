@@ -19,50 +19,52 @@ import org.vituchon.linkexplorer.domain.model.procedure.composite.SinglePageLink
  * @author Administrador
  */
 public class InspectorWorker implements Callable<Void> {
-    
+
     private final String name;
     private final WorkerDirective workerDirective;
-    private final MultiPageLinkInspector owner;
+    private final MultiPageLinkInspector multiPageLinkInspector;
     private volatile String currentUrl;
     private final AtomicInteger inspectedCount;
-    
+
     private final static AtomicInteger NAME_COUNT = new AtomicInteger(0);
     private final static Logger LOGGER = Logger.getLogger(InspectorWorker.class.getName());
 
-    public InspectorWorker(WorkerDirective workerDirective, final MultiPageLinkInspector owner) {
-        this.owner = owner;
+    InspectorWorker(String customName, WorkerDirective workerDirective, final MultiPageLinkInspector multiPageLinkInspector) {
+        this.name = customName;
+        this.multiPageLinkInspector = multiPageLinkInspector;
         this.workerDirective = workerDirective;
-        this.currentUrl = null;
         this.inspectedCount = new AtomicInteger(0);
-        this.name = "worker_"  + NAME_COUNT.incrementAndGet();
+    }
+
+    public InspectorWorker(WorkerDirective workerDirective, final MultiPageLinkInspector multiPageLinkInspector) {
+        this("duende - " + NAME_COUNT.incrementAndGet(), workerDirective, multiPageLinkInspector);
+        this.currentUrl = null;
     }
 
     @Override
     public Void call() throws Exception {
         SinglePageLinkInspector singlePageLinkInspector = SinglePageLinkInspector.newInstance();
         try {
-            this.currentUrl = owner.askNextUrl(this);
-            while (owner.allowWork() && workerDirective.hasToWork(this)) {
-                owner.notifyStart(currentUrl);
+            this.currentUrl = multiPageLinkInspector.askNextUrl(this);
+            while (this.currentUrl != null && multiPageLinkInspector.allowWork() && workerDirective.hasToWork(this)) {
+                multiPageLinkInspector.notifyStart(currentUrl, this);
                 GenericProcedureExecutor<String, Collection<String>> executorHelper = new GenericProcedureExecutor(singlePageLinkInspector, currentUrl);
                 executorHelper.execute();
                 ProcedureStatus lastStatus = executorHelper.getLastStatus();
-                owner.setInspectionStatus(currentUrl, lastStatus);
+                multiPageLinkInspector.setInspectionStatus(currentUrl, lastStatus, this);
                 while (!lastStatus.isDone()) {
                     Thread.sleep(20);
                     lastStatus = executorHelper.getLastStatus();
-                    owner.setInspectionStatus(currentUrl, lastStatus);
+                    multiPageLinkInspector.setInspectionStatus(currentUrl, lastStatus, this);
                 }
                 try {
                     Collection<String> links = executorHelper.getOutput();
                     LOGGER.log(Level.INFO, "Worker {0} found in {1} these links : {2}", new Object[]{name, currentUrl, links.toString()});
-                    owner.notifyEnd(currentUrl,links);
-                }
-                catch (ExecutionException ignore) {
+                    multiPageLinkInspector.notifyEnd(currentUrl, links, this);
+                } catch (ExecutionException ignore) {
                     LOGGER.log(Level.WARNING, "Worker {0} has problems : {1} ", new Object[]{name, ignore.toString()});
                 }
-                inspectedCount.incrementAndGet();
-                this.currentUrl = owner.askNextUrl(this);
+                this.currentUrl = multiPageLinkInspector.askNextUrl(this);
             }
         } catch (InterruptedException escape) {
             Thread.currentThread().interrupt();
@@ -74,12 +76,12 @@ public class InspectorWorker implements Callable<Void> {
         return currentUrl;
     }
 
-    public int getInspectedCount() {
-        return inspectedCount.get();
+    public AtomicInteger getInspectedCount() {
+        return inspectedCount;
     }
-    
+
     public HtmlMap getPartialHtmlMap() {
-        return this.owner.getPartialHtmlMap(); // TODO:tendria que retornar una copia!!!!
+        return this.multiPageLinkInspector.getPartialHtmlMap(); // TODO:tendria que retornar una copia!!!!
     }
 
     public String getName() {

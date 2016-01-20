@@ -19,8 +19,9 @@ import java.util.Set;
  * @author Administrador
  */
 public class MultiPageLinkInspectorStatus extends AbstractProcedureStatus implements EnumerableProcedureStatus<Enum<Phase>> {
+
     private volatile Phase phase = Phase.NONE;
-    private volatile Map<String, ProcedureStatus> inspections = new HashMap<>();
+    private volatile Map<String, SinglePageExplorationStatus> inspections = new HashMap<>();
 
     synchronized void start() {
         this.start = System.currentTimeMillis();
@@ -32,11 +33,11 @@ public class MultiPageLinkInspectorStatus extends AbstractProcedureStatus implem
         phase = Phase.DONE;
     }
 
-    synchronized void setInspectionStatus(String url, ProcedureStatus status) {
-        this.inspections.put(url, status);
+    synchronized void setInspectionStatus(String url, ProcedureStatus status, InspectorWorker worker) {
+        this.inspections.put(url, new SinglePageExplorationStatus(status, worker));
     }
 
-    synchronized Map<String, ProcedureStatus> getInspections() {
+    public synchronized Map<String, SinglePageExplorationStatus> getInspections() {
         return Collections.unmodifiableMap(inspections);
     }
 
@@ -59,12 +60,12 @@ public class MultiPageLinkInspectorStatus extends AbstractProcedureStatus implem
     public String toString() {
         final String endLine = System.lineSeparator();
         StringBuilder sb = new StringBuilder();
-        Set<Entry<String, ProcedureStatus>> inspectionSet = this.inspections.entrySet();
+        Set<Entry<String, SinglePageExplorationStatus>> inspectionSet = this.inspections.entrySet();
 
         sb.append("In phase  : ").append(this.phase).append(endLine);
-        sb.append("Procesing : ").append(inspectionSet.size()).append(endLine);
-        for (Entry<String, ProcedureStatus> inspection : inspectionSet) {
-            sb.append(String.format("\t%-100s|%-50s", inspection.getKey(), inspection.getValue().toString())).append(endLine);
+        sb.append("Procesing ").append(inspectionSet.size()).append(" pages ").append(endLine);
+        for (Entry<String, SinglePageExplorationStatus> inspection : inspectionSet) {
+            sb.append(String.format("\t%-80s|%-80s", inspection.getKey(), inspection.getValue().toString())).append(endLine);
         }
         return sb.toString();
     }

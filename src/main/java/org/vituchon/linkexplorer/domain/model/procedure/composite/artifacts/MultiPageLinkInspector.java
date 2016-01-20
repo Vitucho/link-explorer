@@ -18,27 +18,29 @@ import org.vituchon.linkexplorer.domain.model.procedure.composite.SinglePageLink
 
 public class MultiPageLinkInspector implements GenericQueryableProcedure<String, HtmlMap> {
 
-    private static final int MAX_INSPECTIONS = 20;
-    private static final int MAX_INSPECTORS = 5;
+    private static final int MAX_INSPECTIONS = 200;
     private final BlockingQueue<String> urlsToAnalize;
+    private final ConcurrentHashMap<String, Boolean> takenUrls;
     private final MultiPageLinkInspectorStatus status;
     private final WorkerDirective workerDirective;
-    private final AtomicInteger urlsInspectedCounter = new AtomicInteger(0);
+    private final int workers;
     private HtmlMap htmlMap;
 
     private static final Logger LOGGER = Logger.getLogger(MultiPageLinkInspector.class.getName());
 
-    public MultiPageLinkInspector(WorkerDirective workerDirective) {
+    public MultiPageLinkInspector(WorkerDirective workerDirective, int workers) {
         if (workerDirective == null) {
             throw new IllegalArgumentException("workerDirective can not be null");
         }
         this.urlsToAnalize = new LinkedBlockingDeque<>();
         this.status = new MultiPageLinkInspectorStatus();
         this.workerDirective = workerDirective;
+        this.workers = workers;
+        this.takenUrls = new ConcurrentHashMap<>();
     }
 
     @Override
-    public synchronized HtmlMap perform(String baseUrl) throws Exception {
+    public HtmlMap perform(String baseUrl) throws Exception {
         htmlMap = null;
         try {
             status.start();
@@ -51,20 +53,21 @@ public class MultiPageLinkInspector implements GenericQueryableProcedure<String,
     }
 
     HtmlMap createMap(String baseUrl) throws Exception {
+        InspectorWorker rootInspectorWorker = new InspectorWorker("Papa duende", workerDirective, this);
         SinglePageLinkInspector singlePageLinkInspector = SinglePageLinkInspector.newInstance();
         GenericProcedureExecutor<String, Collection<String>> executorHelper = new GenericProcedureExecutor(singlePageLinkInspector, baseUrl);
         htmlMap = new HtmlMap(baseUrl);
-        notifyStart(baseUrl);
+        notifyStart(baseUrl, rootInspectorWorker);
         executorHelper.execute();
         ProcedureStatus lastStatus = executorHelper.getLastStatus();
-        setInspectionStatus(baseUrl, lastStatus);
+        setInspectionStatus(baseUrl, lastStatus, rootInspectorWorker);
         while (!lastStatus.isDone()) {
             Thread.sleep(20);
             lastStatus = executorHelper.getLastStatus();
-            setInspectionStatus(baseUrl, lastStatus);
+            setInspectionStatus(baseUrl, lastStatus, rootInspectorWorker);
         }
         Collection<String> links = executorHelper.getOutput();
-        notifyEnd(baseUrl, links);
+        notifyEnd(baseUrl, links, rootInspectorWorker);
         return htmlMap; // TODO EVALUAR DISENO ACA... VARIABLE QUE SE USA PARA REFENCIAR UN OBJETO CALIENTE... EN EL SENTIDO DE QUE SE VA CONSTRUYENDO
     }
 
@@ -72,8 +75,8 @@ public class MultiPageLinkInspector implements GenericQueryableProcedure<String,
     private static final TimeUnit TIME_UNIT_AWAIT_FOR_TERMINATION = TimeUnit.MINUTES;
 
     private void fillMap() throws InterruptedException {
-        ExecutorService executorService = Executors.newFixedThreadPool(MAX_INSPECTORS);
-        for (int i = 0; i < MAX_INSPECTORS; i++) {
+        ExecutorService executorService = Executors.newFixedThreadPool(this.workers);
+        for (int i = 0; i < this.workers; i++) {
             executorService.submit(new InspectorWorker(workerDirective, this));
         }
         executorService.shutdown();
@@ -100,36 +103,45 @@ public class MultiPageLinkInspector implements GenericQueryableProcedure<String,
         return status;
     }
 
-    void setInspectionStatus(String url, ProcedureStatus status) {
-        this.status.setInspectionStatus(url, status);
+    void setInspectionStatus(String url, ProcedureStatus status, InspectorWorker who) {
+        this.status.setInspectionStatus(url, status, who);
     }
 
     String askNextUrl(InspectorWorker who) throws InterruptedException {
-        LOGGER.log(Level.INFO, "Inspection worker {0} will take ....", who.getName());
+        LOGGER.log(Level.INFO, "Inspector worker {0} waiting", who.getName());
         String url = this.urlsToAnalize.poll(2L, TimeUnit.SECONDS);
-        LOGGER.log(Level.INFO, "Inspection worker {0} will take {1}", new Object[]{who.getName(), url});
+        LOGGER.log(Level.INFO, "Inspector worker {0} will take {1}", new Object[]{who.getName(), url});
+        if (url == null) {
+            LOGGER.log(Level.WARNING, "url nula! {0}", url);
+
+        } else if (takenUrls.containsKey(url)) {
+            LOGGER.log(Level.WARNING, "url repetida! {0}", url);
+        }
         return url;
     }
 
-    void notifyEnd(String url, Collection<String> links) {
+     synchronized void notifyEnd(String url, Collection<String> links, InspectorWorker who) {
+        who.getInspectedCount().incrementAndGet();
         for (String link : links) {
             if (!url.equals(link)) {
                 this.htmlMap.addLink(url, link);
+                if (!this.takenUrls.containsKey(link)) {
+                    this.urlsToAnalize.add(link);
+                }
             }
         }
-        this.urlsToAnalize.addAll(links);
     }
 
-    int notifyStart(String currentUrl) {
-        this.status.setInspectionStatus(currentUrl, NullProcedureStatus.INSTANCE);
-        return this.urlsInspectedCounter.incrementAndGet();
+    void notifyStart(String url, InspectorWorker who) {
+        takenUrls.put(url, true);
+        this.status.setInspectionStatus(url, NullProcedureStatus.INSTANCE, who);
     }
 
     public boolean allowWork() {
-        return urlsInspectedCounter.get() < MAX_INSPECTIONS;
+        return takenUrls.size() < MAX_INSPECTIONS;
     }
 
-    public HtmlMap getPartialHtmlMap() {
+    public synchronized HtmlMap getPartialHtmlMap() {
         return this.htmlMap;
     }
 

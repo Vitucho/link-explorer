@@ -34,7 +34,7 @@ public class UrlExplorer {
         this.maxDeep = maxDeep;
         this.root = root;
         this.workersDesired = workersDesired;
-        MultiPageLinkInspector inspector = new MultiPageLinkInspector(MaxDeepDirective.newInstance(maxDeep));
+        MultiPageLinkInspector inspector = new MultiPageLinkInspector(MaxDeepDirective.newInstance(maxDeep), workersDesired);
         this.executor = new GenericProcedureExecutor<>(inspector, root, new MultiPageListener(logger));
     }
 
@@ -46,7 +46,7 @@ public class UrlExplorer {
         }
     }
 
-    public ProcedureStatus getLastStatus () {
+    public ProcedureStatus getLastStatus() {
         return this.executor.getLastStatus();
     }
 
@@ -86,7 +86,7 @@ public class UrlExplorer {
                 this.root = root;
                 return this;
             } catch (MalformedURLException ex) {
-                throw new IllegalArgumentException("A valid url is required",ex);
+                throw new IllegalArgumentException("A valid url is required", ex);
             }
         }
 
@@ -110,7 +110,6 @@ public class UrlExplorer {
             throw ex;
         }
     }
-    
 
     private static class MultiPageListener implements GenericProcedureListener<HtmlMap> {
 
@@ -119,16 +118,15 @@ public class UrlExplorer {
         public MultiPageListener(final Logger logger) {
             this.logger = logger;
         }
-        
-        
+
         @Override
         public void recieve(HtmlMap map) {
-            logger.log(Level.INFO,"Process finish without error");
+            logger.log(Level.INFO, "Process finish without error");
         }
 
         @Override
         public void report(Exception e) {
-            logger.log(Level.SEVERE,"Process finish with error",e);
+            logger.log(Level.SEVERE, "Process finish with error", e);
         }
     }
 }
