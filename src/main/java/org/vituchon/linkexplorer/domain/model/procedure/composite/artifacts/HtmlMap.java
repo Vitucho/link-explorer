@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.logging.Logger;
 import org.giordans.graphs.BaseWeightedGraph;
+import org.giordans.graphs.Edge;
 import org.giordans.graphs.Path;
 import org.giordans.graphs.PathFinder;
 import org.giordans.graphs.WeightedGraph;
@@ -62,6 +63,22 @@ public class HtmlMap {
             }
         }
         return sb.toString();
+    }
+
+    public synchronized Map<String, List<String>> toSiteMap() {
+        Map<String, List<String>> siteMap = new HashMap<>();
+        Set<String> nodes = this.map.getNodes();
+        for (String node : nodes) {
+            String name = node;
+            List<String> links = new LinkedList<>();
+            siteMap.put(name, links);
+            Set<Edge<String, Number>> edges = this.map.getOutboundEdges(node);
+            for (Edge<String, Number> edge : edges) {
+                String link = edge.getDestination();
+                links.add(link);
+            }
+        }
+        return siteMap;
     }
 
     public WeightedGraph<String> getMap() {

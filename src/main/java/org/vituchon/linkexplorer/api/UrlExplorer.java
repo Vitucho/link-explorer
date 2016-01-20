@@ -70,7 +70,7 @@ public class UrlExplorer {
 
         private int maxDeep = 2;
         private String root = null;
-        private int workersDesired = 1;
+        private int workersDesired = 2;
 
         public Builder() {
         }
